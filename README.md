@@ -1,4 +1,4 @@
-# WPDC - WordPress Docker Compose
+# WordPress Docker Compose WP-CLI Composer PHPmyAdmin Stack
 
 Easy WordPress development with Docker and Docker Compose.
 
