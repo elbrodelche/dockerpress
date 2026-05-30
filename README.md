@@ -1,153 +1,337 @@
-# WordPress Docker Compose WP-CLI Composer PHPmyAdmin Stack
+# DockerPress: WordPress Local Development Stack
 
-Easy WordPress development with Docker and Docker Compose.
+A Docker Compose based WordPress development environment with:
 
-With this project you can quickly run the following:
+- WordPress (custom image with PHP 8.3 + SOAP extension)
+- MySQL 8.4 (LTS)
+- phpMyAdmin
+- WP-CLI
+- Composer
 
-- [WordPress and WP CLI](https://hub.docker.com/_/wordpress/)
-- [phpMyAdmin](https://hub.docker.com/r/phpmyadmin/phpmyadmin/)
-- [MySQL](https://hub.docker.com/_/mysql/)
+This repository is optimized for local development on macOS/Linux.
 
-Contents:
+## Stack Versions
 
-- [Requirements](#requirements)
-- [Configuration](#configuration)
-- [Installation](#installation)
-- [Usage](#usage)
+Current pinned images and build base:
 
-## Requirements
+- WordPress base image: `wordpress:php8.3-apache` (built from [wordpress/Dockerfile](wordpress/Dockerfile))
+- WP-CLI: `wordpress:cli-php8.3`
+- MySQL: `mysql:8.4`
+- phpMyAdmin: `phpmyadmin:5-apache`
+- Composer: `composer:2`
 
-Make sure you have the latest versions of **Docker** and **Docker Compose** installed on your machine.
+## Service Map
 
-Clone this repository or copy the files from this repository into a new folder. In the **docker-compose.yml** file you may change the IP address (in case you run multiple containers) or the database from MySQL to MariaDB.
+- `wp`: main WordPress app on `${IP}:80`
+- `db`: MySQL database on `${IP}:3306`
+- `pma`: phpMyAdmin UI on `${IP}:8080`
+- `wpcli`: WP-CLI one-off commands (no published port)
+- `composer`: Composer one-off commands (no published port)
 
-Make sure to [add your user to the `docker` group](https://docs.docker.com/install/linux/linux-postinstall/#manage-docker-as-a-non-root-user) when using Linux.
+## Prerequisites
 
-## Configuration
+- Docker Engine installed and running
+- Docker Compose plugin installed (`docker compose`)
+- Git (optional, but recommended)
 
-Edit the `.env` file to change the default IP address, MySQL root password and WordPress database name.
+Verify:
 
-## Installation
-
-Open a terminal and `cd` to the folder in which `docker-compose.yml` is saved and run:
-
-```
-docker-compose up
-```
-
-This creates two new folders next to your `docker-compose.yml` file.
-
-* `wp-data` – used to store and restore database dumps
-* `wp-app` – the location of your WordPress application
-
-The containers are now built and running. You should be able to access the WordPress installation with the configured IP in the browser address. By default it is `http://127.0.0.1`.
-
-For convenience you may add a new entry into your hosts file.
-
-## Usage
-
-### Starting containers
-
-You can start the containers with the `up` command in daemon mode (by adding `-d` as an argument) or by using the `start` command:
-
-```
-docker-compose start
+```bash
+docker --version
+docker compose version
 ```
 
-### Stopping containers
+## Project Structure
 
-```
-docker-compose stop
-```
+- [docker-compose.yml](docker-compose.yml): all services and volumes
+- [wordpress/Dockerfile](wordpress/Dockerfile): WordPress image customization
+- [config/php.conf.ini](config/php.conf.ini): PHP overrides for uploads/memory/timeouts
+- [cli/export.sh](cli/export.sh): exports DB dump to `wp-data/`
+- [cli/setup-hosts-file.sh](cli/setup-hosts-file.sh): add/remove local hostnames
+- [cli/create-cert.sh](cli/create-cert.sh): create a local TLS cert
+- [cli/trust-cert.sh](cli/trust-cert.sh): trust cert in macOS keychain
 
-### Removing containers
+## Quick Start (New Project)
 
-To stop and remove all the containers use the`down` command:
+- Clone the repository and enter it.
 
-```
-docker-compose down
-```
-
-Use `-v` if you need to remove the database volume which is used to persist the database:
-
-```
-docker-compose down -v
-```
-
-### Project from existing source
-
-Copy the `docker-compose.yml` file into a new directory. In the directory you create two folders:
-
-* `wp-data` – here you add the database dump
-* `wp-app` – here you copy your existing WordPress code
-
-You can now use the `up` command:
-
-```
-docker-compose up
+```bash
+git clone <your-repo-url> dockerpress
+cd dockerpress
 ```
 
-This will create the containers and populate the database with the given dump. You may set your host entry and change it in the database, or you simply overwrite it in `wp-config.php` by adding:
+- Create your environment file.
 
-```
-define('WP_HOME','http://wp-app.local');
-define('WP_SITEURL','http://wp-app.local');
-```
-
-### Creating database dumps
-
-```
-./export.sh
+```bash
+cp .env.dist .env
 ```
 
-### Developing a Theme
+- Edit `.env` with secure credentials.
 
-Configure the volume to load the theme in the container in the `docker-compose.yml`:
-
-```
-volumes:
-  - ./theme-name/trunk/:/var/www/html/wp-content/themes/theme-name
-```
-
-### Developing a Plugin
-
-Configure the volume to load the plugin in the container in the `docker-compose.yml`:
-
-```
-volumes:
-  - ./plugin-name/trunk/:/var/www/html/wp-content/plugins/plugin-name
+```dotenv
+IP=127.0.0.1
+DB_ROOT_PASSWORD=change-this-root-password
+DB_NAME=wordpress
+DB_USER=wordpress
+DB_PASSWORD=change-this-app-password
 ```
 
-### WP CLI
+- Start the stack.
 
-The docker compose configuration also provides a service for using the [WordPress CLI](https://developer.wordpress.org/cli/commands/).
-
-Sample command to install WordPress:
-
-```
-docker-compose run --rm wpcli core install --url=http://localhost --title=test --admin_user=admin --admin_email=test@example.com
+```bash
+docker compose up -d --build
 ```
 
-Or to list installed plugins:
+- Open the app:
 
-```
-docker-compose run --rm wpcli plugin list
+- WordPress: `http://127.0.0.1`
+- phpMyAdmin: `http://127.0.0.1:8080`
+
+- Complete WordPress installation in the browser.
+
+## Environment Variables
+
+Required values in `.env`:
+
+- `IP`: bind address for published ports (default `127.0.0.1`)
+- `DB_ROOT_PASSWORD`: MySQL root password (admin only)
+- `DB_NAME`: application database name
+- `DB_USER`: non-root WordPress DB user
+- `DB_PASSWORD`: non-root WordPress DB password
+
+Recommendation:
+
+- Keep `IP=127.0.0.1` for local-only exposure.
+- Use long random passwords for `DB_ROOT_PASSWORD` and `DB_PASSWORD`.
+
+## Common Operations
+
+### Start
+
+```bash
+docker compose up -d
 ```
 
-For an easier usage you may consider adding an alias for the CLI:
+### Stop
 
-```
-alias wp="docker-compose run --rm wpcli"
+```bash
+docker compose stop
 ```
 
-This way you can use the CLI command above as follows:
+### Restart
 
+```bash
+docker compose restart
 ```
+
+### View Logs
+
+```bash
+docker compose logs -f
+```
+
+### Rebuild WordPress Image
+
+Use this after changing [wordpress/Dockerfile](wordpress/Dockerfile):
+
+```bash
+docker compose build wp
+docker compose up -d
+```
+
+### Remove Containers (Keep DB Volume)
+
+```bash
+docker compose down
+```
+
+### Remove Containers and DB Volume (Destructive)
+
+```bash
+docker compose down -v
+```
+
+## WP-CLI Usage
+
+Run commands through the `wpcli` service:
+
+```bash
+docker compose run --rm wpcli plugin list
+docker compose run --rm wpcli theme list
+```
+
+Install WordPress from CLI example:
+
+```bash
+docker compose run --rm wpcli core install \
+  --url=http://localhost \
+  --title="Local WordPress" \
+  --admin_user=admin \
+  --admin_email=admin@example.com
+```
+
+Optional shell alias:
+
+```bash
+alias wp='docker compose run --rm wpcli'
+```
+
+Then:
+
+```bash
 wp plugin list
 ```
 
-### phpMyAdmin
+## Composer Usage
 
-You can also visit `http://127.0.0.1:8080` to access phpMyAdmin after starting the containers.
+Run composer in the app directory (`wp-app`):
 
-The default username is `root`, and the password is the same as supplied in the `.env` file.
+```bash
+docker compose run --rm composer --version
+docker compose run --rm composer require wpackagist-plugin/query-monitor
+```
+
+## Database Backup and Restore
+
+### Export (Backup)
+
+Creates a SQL dump in `wp-data/` using [cli/export.sh](cli/export.sh):
+
+```bash
+./cli/export.sh
+```
+
+### Restore
+
+- Stop stack and clear existing DB volume:
+
+```bash
+docker compose down -v
+```
+
+- Place your `.sql` file into `wp-data/`.
+
+- Start again:
+
+```bash
+docker compose up -d
+```
+
+MySQL imports files in `wp-data/` during initialization.
+
+## Using Existing WordPress Source
+
+1. Place your existing WordPress files in `wp-app/`.
+2. Place your DB dump in `wp-data/`.
+3. Start stack:
+
+```bash
+docker compose up -d
+```
+
+If needed, force URLs in [wp-app/wp-config.php](wp-app/wp-config.php):
+
+```php
+define('WP_HOME', 'http://wp-app.local');
+define('WP_SITEURL', 'http://wp-app.local');
+```
+
+## Local Domain and HTTPS Helpers (macOS)
+
+Scripts are in [cli](cli).
+
+### Add/Remove Host Entry
+
+Interactive script:
+
+```bash
+./cli/setup-hosts-file.sh
+```
+
+### Create Local Certificate
+
+Run from `cli/` directory because cert output paths are relative:
+
+```bash
+cd cli
+./create-cert.sh
+```
+
+This creates cert/key files in `certs/`.
+
+### Trust Certificate in macOS Keychain
+
+Also run from `cli/` directory:
+
+```bash
+cd cli
+./trust-cert.sh
+```
+
+## Security Notes
+
+- Images are pinned to major/minor tags for predictable behavior.
+- For maximum reproducibility, pin image digests in [docker-compose.yml](docker-compose.yml).
+- Do not commit `.env` with real passwords.
+- Keep Docker Desktop / Engine and images updated regularly:
+
+```bash
+docker compose pull --ignore-buildable
+docker compose build wp
+docker compose up -d
+```
+
+## Troubleshooting
+
+### Containers do not start
+
+```bash
+docker compose ps
+docker compose logs -f db
+docker compose logs -f wp
+```
+
+### Port already in use
+
+Change `IP` in `.env` or stop the conflicting service.
+
+### Database connection errors in WordPress
+
+Check:
+
+- `.env` credentials (`DB_NAME`, `DB_USER`, `DB_PASSWORD`)
+- db health status
+- WordPress logs
+
+```bash
+docker compose ps
+docker compose logs -f db
+docker compose logs -f wp
+```
+
+### phpMyAdmin login fails
+
+- Host: `db`
+- User: `root` (or `DB_USER`)
+- Password: from `.env`
+
+### Clean reset
+
+Warning: this removes DB data.
+
+```bash
+docker compose down -v
+rm -rf wp-app
+mkdir -p wp-app wp-data
+docker compose up -d --build
+```
+
+## Development Tips
+
+- Keep plugins/themes in version control in your host project and mount them into `wp-app/wp-content`.
+- Use WP-CLI for repeatable setup steps.
+- Use separate `.env` values per project if you run multiple stacks.
+
+## License
+
+See [LICENSE](LICENSE).
